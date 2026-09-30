@@ -43,19 +43,62 @@ async function plantnet(dataUrl: string) {
 }
 
 async function gemini(key: string, parts: unknown[]) {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+
+  const r = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": key,
+    },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYS }] },
-      contents: [{ role: "user", parts }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.3 },
+      systemInstruction: {
+        parts: [{ text: SYS }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts,
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.3,
+      },
     }),
   });
-  if (!r.ok) throw new Error(`Model request failed (${r.status}). Check GEMINI_API_KEY and GEMINI_MODEL.`);
+
+  if (!r.ok) {
+    const errorText = await r.text();
+
+    console.error("Gemini API error:", {
+      status: r.status,
+      statusText: r.statusText,
+      model: MODEL,
+      body: errorText,
+    });
+
+    throw new Error(
+      `Gemini API ${r.status}: ${errorText.slice(0, 1000)}`
+    );
+  }
+
   const j = await r.json();
-  const t = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
-  return JSON.parse(t.replace(/^```json|```$/g, "").trim());
+
+  const t =
+    j.candidates?.[0]?.content?.parts
+      ?.map((p: any) => p.text ?? "")
+      .join("") ?? "";
+
+  if (!t) {
+    throw new Error(
+      `Gemini returned no text: ${JSON.stringify(j).slice(0, 1000)}`
+    );
+  }
+
+  return JSON.parse(
+    t.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim()
+  );
 }
 
 function mock(mode: string) {
